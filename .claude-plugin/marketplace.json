@@ -1,0 +1,15 @@
+{
+  "name": "inkentry",
+  "owner": {
+    "name": "inkentry",
+    "url": "https://inkentry.com"
+  },
+  "description": "The inkentry agent skill.",
+  "plugins": [
+    {
+      "name": "inkentry",
+      "source": "./",
+      "description": "Code and decision retrieval for an inkentry-indexed repository."
+    }
+  ]
+}

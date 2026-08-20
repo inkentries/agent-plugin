@@ -1,0 +1,19 @@
+{
+  "name": "inkentry",
+  "description": "Code and decision retrieval for an inkentry-indexed repository: search over code and memory, call and import graph traversal, and durable decisions that travel with the repo.",
+  "version": "1.0.0",
+  "author": {
+    "name": "inkentry",
+    "url": "https://inkentry.com"
+  },
+  "homepage": "https://inkentry.com",
+  "repository": "https://github.com/inkentries/inkentry",
+  "license": "MIT",
+  "keywords": [
+    "code-search",
+    "code-graph",
+    "memory",
+    "context",
+    "rust"
+  ]
+}
