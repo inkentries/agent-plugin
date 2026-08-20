@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "author": {
     "name": "inkentry",
-    "url": "https://inkentry.com"
+    "url": "https://www.inkentry.com"
   },
-  "homepage": "https://inkentry.com",
+  "homepage": "https://www.inkentry.com",
   "repository": "https://github.com/inkentries/inkentry",
   "license": "MIT",
   "keywords": [
