@@ -72,6 +72,7 @@ With `--format json`/`jsonl`, each result is a nested envelope naming the corpus
 
 **Removed in this release** — these exit 2 with a migration hint, and are not in `--help`:
 
+<!-- skill-commands: ignore-until-blank-line (the Removed column names commands that are gone by design) -->
 | Removed | Use |
 |---|---|
 | `inkentry memory search "<q>"` | `inkentry search "<q>" --only-memory` |
@@ -82,6 +83,7 @@ With `--format json`/`jsonl`, each result is a nested envelope naming the corpus
 
 `inkentry memory graph <id>` is a different, live command.
 
+<!-- skill-commands: ignore-until-blank-line (names the removed command in order to say it is gone) -->
 `inkentry explore` is also gone. It exits 2 like the rows above, but with clap's
 generic unknown-subcommand error rather than a hint naming a replacement,
 because there is no single command to name: the loop below is the replacement,

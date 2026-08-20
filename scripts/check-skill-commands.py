@@ -40,6 +40,58 @@ def subcommands(path: list[str]) -> set[str]:
     return names
 
 
+# `inkentry` as the command being run, not as a word. Anchored to a shell
+# boundary so `git notes --ref=inkentry show HEAD` is git's `show`, not ours,
+# and a quoted `"Keeps inkentry self-contained"` is prose in an argument.
+INVOCATION = re.compile(
+    r"(?:^|[|;&]|\$\()[ \t]*(?:[A-Z_][A-Z0-9_]*=\S*[ \t]+)*"
+    r"inkentry[ \t]+([a-z][a-z0-9-]*)(?:[ \t]+([a-z][a-z0-9-]*))?"
+)
+
+
+def ignored_spans(text: str):
+    """Regions the skill marks as deliberately naming dead commands.
+
+    The migration table lists what was removed beside what replaced it. Its
+    left column is supposed to name commands the CLI no longer has.
+    """
+    spans = []
+    for m in re.finditer(r"<!--\s*skill-commands:\s*ignore-until-blank-line.*?-->", text):
+        end = text.find("\n\n", m.end())
+        spans.append((m.start(), len(text) if end == -1 else end))
+    return spans
+
+
+def code_regions(text: str, ignored=()):
+    """(source, offset) for every fenced block and inline code span.
+
+    Prose is excluded deliberately. "inkentry is a context retrieval tool" and
+    "inkentry uses the best ranking available" are English sentences, and a
+    guard that reports them is a guard someone deletes.
+    """
+    def suppressed(pos):
+        return any(lo <= pos < hi for lo, hi in ignored)
+
+    regions = []
+    for m in re.finditer(r"```[a-z]*\n(.*?)```", text, re.DOTALL):
+        if not suppressed(m.start(1)):
+            regions.append((m.group(1), m.start(1)))
+    for m in re.finditer(r"`([^`\n]+)`", text):
+        if not suppressed(m.start(1)):
+            regions.append((m.group(1), m.start(1)))
+    return regions
+
+
+def classify(first, second, offset, top, groups):
+    if first not in top:
+        return [(first, offset)]
+    # Only judge the second word when the first really is a group:
+    # `inkentry search authentication` has a query there, not a subcommand.
+    if second and groups.get(first) and second not in groups[first]:
+        return [(f"{first} {second}", offset)]
+    return []
+
+
 def main() -> int:
     top = subcommands([])
     if not top:
@@ -49,15 +101,11 @@ def main() -> int:
 
     text = SKILL.read_text()
     unknown = []
-    for m in re.finditer(r"\binkentry\s+([a-z][a-z0-9-]*)(?:\s+([a-z][a-z0-9-]*))?", text):
-        first, second = m.group(1), m.group(2)
-        if first not in top:
-            unknown.append((first, m.start()))
-            continue
-        # Only complain about the second word when the first really is a group:
-        # `inkentry search authentication` has a query there, not a subcommand.
-        if second and groups.get(first) and second not in groups[first]:
-            unknown.append((f"{first} {second}", m.start()))
+    for chunk, base in code_regions(text, ignored_spans(text)):
+        for m in re.finditer(INVOCATION, chunk):
+            first, second = m.group(1), m.group(2)
+            offset = base + m.start()
+            unknown.extend(classify(first, second, offset, top, groups))
 
     if unknown:
         print(f"{SKILL} names commands the installed inkentry does not have:\n", file=sys.stderr)
