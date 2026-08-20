@@ -18,17 +18,18 @@ code and prior decisions, then reason over the results yourself.
 
 ## Setup
 
-- `inkentry` (and `inkentry-server`) in PATH
-
-**Check this first.** If `inkentry --version` does not resolve, the tool is not
-installed and every command below will fail. Tell the user rather than guessing:
-`curl -fsSL https://get.inkentry.com/install.sh | sh` on macOS or Linux, or
-`irm https://get.inkentry.com/install.ps1 | iex` on Windows. Installing the
+**Check `inkentry --version` first.** If it does not resolve the tool is not
+installed and every command below fails. Say so rather than guessing:
+`curl -fsSL https://get.inkentry.com/install.sh | sh` on macOS or Linux,
+`irm https://get.inkentry.com/install.ps1 | iex` on Windows. Installing this
 skill does not install the CLI.
 
-Core features (memory, full-text search, code graph, conventions) work without any inference server.
+Memory, full-text search and the code graph need no server. Semantic ranking
+does, and `inkentry-server` starts on demand, so that is normally invisible.
+Under `INKENTRY_NO_SERVER=1` the commands marked **(requires server)** fall
+back to full-text or fail with a clear reason.
 
-**Semantic search and AI features** go through `inkentry-server`, which is autostarted locally on demand from v0.8.0. It bundles a native embedder (codefuse-ai/F2LLM-v2-330M, 896-dim, GPU-accelerated on macOS); the embedding model and its compute path are both pinned product-wide, with no external embedding endpoint or config option. Manage it with `inkentry server start|stop|status|logs`. Commands that need the server are marked **(requires server)** below; with `INKENTRY_NO_SERVER=1` they fall back to full-text search or error clearly.
+Set `AGENT=true` on any command for machine-readable output.
 
 ---
 
@@ -56,9 +57,6 @@ inkentry search "<symbol>" --graph --graph-limit 25 # cap on appended neighbours
 inkentry plumbing graph-edges --symbol <symbol>     # exact edges as JSONL
 inkentry plumbing graph-edges --file <file-path>
 
-# Status
-inkentry status --format text|json|jsonl
-
 # Inspect what was indexed for a file
 inkentry chunks <file-path>
 inkentry chunks <file-path> --format text|json|jsonl
@@ -69,6 +67,8 @@ inkentry chunks <file-path> --format text|json|jsonl
 Use `--only-text` for targeted lookups without a server. Use plain `search` for concept-level queries. When the answer requires tracing across multiple files, run the multi-hop loop yourself — see "Exploring: multi-hop retrieval" below.
 
 With `--format json`/`jsonl`, each result is a nested envelope naming the corpus it came from — `{type, fused_rank, fused_score, corpus_rank, code|memory: {…}}` — not a flat array of results. Read the payload under `.code` or `.memory` per `.type`; relevance inside it is `distance` (lower is better), not a score. `--graph` neighbours and memory attachments are appended after the ranked members with all three fusion fields `null`.
+
+---
 
 ### Exploring: multi-hop retrieval (you run the loop)
 
@@ -102,49 +102,6 @@ Add a `.inkentryignore` file (same syntax as `.gitignore`) to exclude paths from
 
 ---
 
-## Server daemon
-
-```bash
-inkentry server start           # start the local daemon (idempotent; auto-binds 127.0.0.1:4655)
-inkentry server status          # PID, port, instance id, uptime
-inkentry server logs            # last 50 lines of the server log
-inkentry server stop            # stop the daemon (SIGTERM)
-```
-
-State lives under `~/.local/state/inkentry/` (`server.pid`, `server.port`, `server.instance_id`, `server.log`).
-
----
-
-## Plumbing commands
-
-Plumbing commands emit JSONL and are designed for scripts and pipelines.
-Exit codes: `0` = success, `1` = no results, `2` = error. See [Plumbing and Porcelain](docs/plumbing-and-porcelain.md) for full details.
-
-```bash
-# Parse a file and emit AST chunks (no DB, no server)
-inkentry plumbing parse-file <file>
-
-# Compute and verify file hash (no server)
-inkentry plumbing hash-file <file>
-
-# Emit code graph edges (no server)
-inkentry plumbing graph-edges --file <f> | --symbol <s>
-
-# Emit memory entries as JSONL (no server)
-inkentry plumbing read-memory [--kind <k>] [--limit N]
-
-# Emit indexed chunks for a file (requires index)
-inkentry plumbing cat-chunks <file>
-
-# List all indexed files (requires index)
-inkentry plumbing ls-files [--prefix <p>] [--stale]
-
-# Read embedding from stdin, return nearest chunks by similarity (requires server + index)
-echo "your query" | inkentry plumbing embed --query | inkentry plumbing knn --limit 10
-```
-
----
-
 ## Memory
 
 Stores decisions, context, and requirements that persist across sessions.
@@ -171,21 +128,9 @@ inkentry memory add --kind note --title "Follow-up observation" --body "..." \
 
 **Kinds:** `decision` · `context` · `requirement` · `note` · `intent` · `answer` · `handoff` · `question` · `antipattern`
 
-By default (`store_in_git_notes = true`) `memory add` also writes the entry to
-`refs/notes/inkentry` on `HEAD`. Those notes stay on this machine until the
-pre-push hook is installed (`inkentry hooks install --pre-push`), because
-`git push` does not push `refs/notes/*`. Graceful no-op outside a git repo.
-
-To check those notes by hand with stock git, point it at the `inkentry` ref.
-Plain `git notes show` reads git's default `commits` ref and reports "no note
-found", which is a false negative:
-
-```bash
-git notes --ref=inkentry show HEAD    # notes on the current commit
-git notes --ref=inkentry list         # every commit carrying inkentry notes
-# equivalently
-GIT_NOTES_REF=refs/notes/inkentry git notes show HEAD
-```
+Entries also write through to `refs/notes/inkentry` so they travel with the
+repo. See `references/git-notes.md` if you need to push, inspect or disable
+that.
 
 ### Query
 
@@ -209,80 +154,6 @@ inkentry memory failures                   # list all antipatterns (shortcut for
 inkentry memory failures --limit 30
 ```
 
-### Harvest from git history or Claude Code history
-
-```bash
-inkentry harvest                    # analyse HEAD~10..HEAD
-inkentry harvest --git-range v0.1.0..HEAD
-inkentry harvest --branch main      # full branch history
-inkentry harvest --source claude-code --confirm  # extract from ~/.claude/history.jsonl
-inkentry harvest --source failures  # extract antipatterns from revert/bugfix commits
-inkentry harvest --source failures --git-range v0.4.0..HEAD
-```
-
-
-Extracts decisions, requirements, and non-obvious notes. From git, analyzes commit messages.
-From `claude-code`, reads agent session transcripts from `~/.claude/history.jsonl`.
-Run at the start of a session on a new repo, or after a batch of significant commits.
-Requires `llm_model` in config. The `--source claude-code` requires `--confirm` flag.
-
----
-
-## Status & registry
-
-```bash
-inkentry status                 # index health for current project
-inkentry status --all           # all registered projects
-inkentry status --list          # one-line table
-inkentry status --format json   # machine-readable output
-
-inkentry autoclean              # remove stale registry entries (deleted/moved projects)
-inkentry link <path>            # include another project's index in searches
-inkentry unlink <path>
-```
-
----
-
-## Git worktrees
-
-Read/query commands (`context`, `search`, `memory list`,
-`memory show`, `plumbing graph-edges`, `status`) run from a linked worktree resolve to the
-main worktree's shared index automatically, with no setup step. Nothing is
-written into the worktree:
-
-```bash
-git worktree add ../my-feature my-feature-branch
-cd ../my-feature
-inkentry context    # resolves to the main worktree's index; no init needed
-```
-
-`memory add` is a write, not a read/query command, but it resolves the same
-way: an entry recorded from a linked worktree lands in the main worktree's
-shared `<main-worktree>/.inkentry/memory.db`, and its git-notes write-through
-appends to the repo's shared `refs/notes/inkentry`. There is no separate
-per-worktree memory store, so recording memory from a worktree needs no setup
-and stays in one place.
-
-`inkentry index .` from a worktree is optional. Run it only to refresh the
-shared index with files you changed in that worktree; it re-indexes into the
-shared `<main-worktree>/.inkentry/index.db`.
-
-`inkentry autoclean` prunes stale registry entries (e.g. after a worktree or
-project directory is removed). It does not write to or clean anything inside
-the worktree.
-
----
-
-## Agent mode
-
-Set `AGENT=true` for clean machine-readable output on all commands:
-
-```bash
-AGENT=true inkentry search "authentication flow"
-AGENT=true inkentry search "storage decisions" --only-memory
-AGENT=true inkentry plumbing graph-edges --file src/storage/db.rs
-```
-
 ---
 
 ## Agent workflow
@@ -301,12 +172,8 @@ inkentry index .
 
 `inkentry context` replaces the multi-command sequence. It retrieves handoffs, open questions, decisions, and requirements in one call. The default output is compact; pass `--budget <N>` (alias `--max-tokens`) to cap total output at N tokens.
 
-**Understanding code:**
-1. `AGENT=true inkentry search "<topic>"` — code and memory in one ranked list (semantic ranking requires server + index)
-2. `AGENT=true inkentry search "<topic>" --only-text` — full-text only, no server needed
-3. Read reported file/line ranges
-4. `AGENT=true inkentry plumbing graph-edges --symbol <symbol>` — trace call chains (exits 1 when the symbol has no edges)
-5. `AGENT=true inkentry search "<topic>" --only-memory` — check recorded context for *why*
+**Understanding code:** run the multi-hop loop above. One-off lookups do not
+need it: a single `inkentry search` often answers the question.
 
 **Making changes:**
 1. Search and read before changing
@@ -335,4 +202,17 @@ inkentry index .   # only if project is indexed
 - All indexed-project commands can be run from any subdirectory — the index is found automatically.
 - `inkentry search --only-text` needs no server. Over **code** it is BM25 over independent terms (any order, case-insensitive, not stemmed). Over **memory** it is not: the query is matched as one contiguous phrase, so `"handling error"` finds nothing that `"error handling"` finds. To reach a memory entry whose wording you do not know, use the default ranking (needs the server) or `memory list` / `context`, which take no query. Both text and semantic paths read the index built by `inkentry init`; there is no working-tree scan.
 - `inkentry harvest` and LLM summaries require a server with an LLM backend configured.
-- After changing the embedding model, run `inkentry index <path> --force` to rebuild the index.
+
+---
+
+## When you need more
+
+Read these only when the task calls for them; they are not needed to search,
+read or record.
+
+- `references/plumbing.md` — JSONL commands for scripts and pipelines, and
+  their exit-code contract.
+- `references/projects-and-worktrees.md` — registry, `link`/`unlink`,
+  `autoclean`, running from a git worktree, managing the server daemon.
+- `references/harvest.md` — mining decisions out of git or Claude Code history.
+  Requires a server with an LLM backend.
