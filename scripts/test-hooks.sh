@@ -316,7 +316,7 @@ assert_eq "first stop after an edit blocks" block "$(field decision "$OUT")"
 REASON=$(field reason "$OUT")
 assert_has "the prompt quotes the write command" "$REASON" "inkentry memory add --reconcile --format json --kind"
 assert_has "the prompt names the resolutions" "$REASON" "--supersedes, --relates-to, --contradicts or --distinct-from"
-assert_has "the prompt points at the contract" "$REASON" "references/agent-contract.md"
+assert_has "the prompt points at the skill" "$REASON" "Memory section of the inkentry skill"
 assert_lacks "the stop hook never emits a permission decision" "$OUT" "permissionDecision"
 
 run stop.sh "$(input Stop s-11 "$REPO" '"stop_hook_active":false')"

@@ -28,7 +28,7 @@ Before you stop: if this session made a decision, confirmed a requirement, or re
 
 inkentry memory add --reconcile --format json --kind <decision|requirement|antipattern> --title "<short noun phrase>" --body "<what, why, what was rejected, what it affects>" --tags <existing tags> --files <repo-relative paths>
 
-Run inkentry memory tags first and reuse a tag. If the write exits 3, read the candidates and repeat it with --supersedes, --relates-to, --contradicts or --distinct-from <id>. The rules are in references/agent-contract.md of the inkentry skill.
+Run inkentry memory tags first and reuse a tag. If the write exits 3, read the candidates and repeat it with --supersedes, --relates-to, --contradicts or --distinct-from <id>. The rules are in the Memory section of the inkentry skill.
 PROMPT
 )
 

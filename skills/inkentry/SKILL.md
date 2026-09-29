@@ -2,7 +2,7 @@
 name: inkentry
 description: >-
   Retrieve code and prior decisions from an inkentry-indexed repository, and
-  record decisions as they are made, following the write contract for kind,
+  record decisions as they are made, following the write rules for kind,
   title, body, tags and links. Use when answering a question about this
   codebase that needs tracing across files, when looking for why something was
   built the way it was, or after concluding something worth keeping. Provides
@@ -106,35 +106,25 @@ Add a `.inkentryignore` file (same syntax as `.gitignore`) to exclude paths from
 ## Memory
 
 Stores decisions, requirements and context that persist across sessions.
-Answers "why was this built this way?" alongside the code index.
+Answers "why was this built this way?" alongside the code index. inkentry
+stores what you write and never judges it: you are the extractor.
 
-**You are the extractor.** inkentry stores and retrieves what you write and
-never judges it, so memory is only as good as the entries you record. The full
-write contract is in `references/agent-contract.md`. Read it before your first
-write in a session, and whenever you are unsure of a kind, an update, or how to
-resolve a reconcile candidate. The rules you need on every write are below.
+**Kinds.** `decision`: a choice between alternatives, made; say what was
+rejected and why. `requirement`: a constraint the human or the environment
+imposes. `antipattern`: an approach that looks right but makes the code harder
+to maintain; say why. `context`: standing background that explains why the
+project is the way it is. `note`: an observation worth keeping that is none of
+the above. `question`: something open that someone must answer. `answer`: its
+resolution, written with `--relates-to <question id>`. `intent`: work in
+progress others should not collide with; `inkentry memory archive <id>` when
+done. `handoff`: where the work stands when a session ends: done, next, open.
 
-**Needs inkentry 1.2.0** for `--reconcile` and its resolution flags,
-`memory tags`, `memory list --file` and `memory anchor`; check
-`inkentry --version`. On an older CLI, write with a plain `memory add` (no
-`--reconcile`), skip `memory tags`, and search first so you do not record what
-is already there: `inkentry search "<title>" --only-memory`.
-
-### Kinds
-
-- `decision`: a choice between alternatives, made. Say what was rejected and why.
-- `requirement`: a constraint the human or the environment imposes; you did not choose it.
-- `antipattern`: something tried and rejected, with why.
-- `note`: an observation worth keeping that is none of the above.
-- `context`: standing background that explains why the project is the way it is.
-- `intent`: work in progress others should not collide with. Archive it when done.
-- `question`: something open that someone must answer.
-- `answer`: the resolution of a recorded question; link it with `--relates-to <question id>`.
-- `handoff`: where the work stands at the end of a session: done, next, open.
-
-### Write an entry
+**Write** when you make a choice, when the human states a constraint, when you
+reject an approach, when a question is left open, and at the end of a session.
+Not progress narration, and not what the code or the diff already says.
 
 ```bash
+inkentry memory tags                       # reuse a tag before inventing one
 inkentry memory add --reconcile --format json \
   --kind decision \
   --title "Chose sqlite-vec over Qdrant" \
@@ -143,53 +133,28 @@ inkentry memory add --reconcile --format json \
   --files src/storage/db.rs
 ```
 
-- **Title**: a short phrase that names the subject, searchable words first.
-  Past tense for a decision. No trailing period, no "we".
-- **Body**: a self-contained statement, readable without the conversation that
-  produced it: what was decided, why, what was rejected, what it affects. Keep
-  names, numbers and paths; no "we discussed" or "as mentioned". A few
-  sentences to a short paragraph. If it needs headings, it is a document: put
-  it in the repository and link it by path.
-- **Tags**: run `inkentry memory tags` first and reuse one before inventing
-  one. Lowercase, hyphenated, one to four. Tags are normalised on write, but
-  `auth` and `authentication` stay two tags.
-- **Files**: `--files` with the repository-relative paths the entry is about, so
-  `memory list --file`, `context --file` and `search --file` surface it when
-  that file is touched.
-- **When**: when you make a choice, when the human confirms a requirement, when
-  something is tried and rejected, at the end of a session (`handoff`), and when
-  a question is left open. Not for progress narration, not for what the code
-  already says, not for anything the diff shows.
+- Title: a short phrase naming the subject, past tense for a decision.
+- Body: self-contained, readable without this conversation: what, why, what
+  was rejected, what it affects. Keep names, numbers and paths.
+- Tags: lowercase, one to four, from `memory tags`. Files: repository-relative
+  paths the entry is about, so they surface when that file is edited.
 
-### Reconcile and update
+**Reconcile.** Exit `3` with `{"created": false, "reason": "candidates", ...}`
+means a near-restatement exists and nothing was written. Read each candidate
+(`inkentry memory show <id>`) and repeat the command with one flag per
+candidate: `--supersedes <id>` (this replaces that), `--relates-to <id>` (both
+stand, related), `--contradicts <id>` (both stand, disagree),
+`--distinct-from <id>` (similar words, different thing). To change what memory
+says, write a new entry with `--supersedes <old id>`; entries are never edited
+or deleted.
 
-An entry is immutable. `--reconcile` makes `memory add` check for a
-near-restatement first. Exit status `3` with
-`{"created": false, "reason": "candidates", "candidates": [...]}` means nothing
-was written: read each candidate (`inkentry memory show <id>`), then repeat the
-same command with a resolution naming its `id`:
+**Needs inkentry 1.2.0** for `--reconcile`, its resolution flags, `memory tags`,
+`memory list --file` and `memory anchor`. On an older CLI write with a plain
+`memory add` and search first: `inkentry search "<title>" --only-memory`.
 
-- `--supersedes <id>`: this replaces that entry (an update: same subject, a new conclusion).
-- `--relates-to <id>`: both stand and are related.
-- `--contradicts <id>`: both stand and disagree.
-- `--distinct-from <id>`: similar wording, a different thing; records nothing.
-
-Each flag takes one id, so combine flags for several candidates. The write goes
-through once any one is present, so read every candidate first. A successful
-write returns `related`: non-blocking neighbours. Read them; links can only be
-made when an entry is written, so pass `--relates-to` up front when you know
-what an entry builds on. To change what memory says, write a new entry with
-`--supersedes <old id>`; never leave a wrong entry active beside a note that
-says so.
-
-### Declare the caller
-
-Commands you run on purpose carry `INKENTRY_TRIGGER=explicit
-INKENTRY_ACTOR=agent INKENTRY_TOOL=<your tool name>`, and `INKENTRY_MODEL=<model
-id>` when you know it. In Claude Code the plugin's session-start hook exports
-these for every Bash command, so there is nothing to add. Anywhere else, export
-them once for the shell session. Never guess: an undeclared value reads as
-`unknown`.
+Outside Claude Code, export `INKENTRY_TRIGGER=explicit INKENTRY_ACTOR=agent
+INKENTRY_TOOL=<tool>` once per shell, so the event log can tell your calls from
+a hook's. In Claude Code the session-start hook does this.
 
 Entries also write through to `refs/notes/inkentry` so they travel with the
 repo. See `references/git-notes.md` if you need to push, inspect or disable
@@ -286,12 +251,9 @@ nothing on an older CLI; the session-start context works on any.
 
 ## When you need more
 
-Read these only when the task calls for them; the first is the one to read
-before you record anything, and none is needed to search or read.
+Read these only when the task calls for them; they are not needed to search,
+read or record.
 
-- `references/agent-contract.md`: the write contract: kinds with examples,
-  title and body, when to write, tags, files, the reconcile loop, updates and
-  the caller declaration. Read it before your first write of a session.
 - `references/plumbing.md` — JSONL commands for scripts and pipelines, and
   their exit-code contract.
 - `references/projects-and-worktrees.md` — registry, `link`/`unlink`,

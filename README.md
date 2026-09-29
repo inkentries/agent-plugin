@@ -56,7 +56,7 @@ older one; the session start needs only `context`, which older CLIs have.
 | `SessionStart`, every source including `compact` | Runs `inkentry context --budget 2500 --format text` and adds the result to the agent's context. Also writes the session's caller declaration to `CLAUDE_ENV_FILE`, so every Bash command the agent runs carries it. |
 | `PreToolUse` on `Edit`, `Write`, `MultiEdit` | Looks up `inkentry memory list --file <path>` for the file about to change and adds the entries (id, kind, title, body, trimmed) to the agent's context. Never decides whether the edit may proceed. |
 | `PostToolUse` on `Bash` | After a `git commit` (including `--amend`), runs `inkentry memory anchor --commit HEAD`, which claims the commit for the entries written on the way to it. The git post-commit hook does this too, but git hooks are per clone and often absent. |
-| `Stop` | Once per session, and only if the session edited a file or committed, asks the agent to record what it decided, quoting the `memory add --reconcile` command and pointing at the contract. If nothing qualifies, the agent just stops. |
+| `Stop` | Once per session, and only if the session edited a file or committed, asks the agent to record what it decided, quoting the `memory add --reconcile` command and pointing at the skill's Memory section. If nothing qualifies, the agent just stops. |
 
 None of them needs the inference server: `context`, `memory list --file` and
 `memory anchor` read and write the local store.
@@ -90,16 +90,6 @@ repository.
 
 **Turning them off.** Uninstall the plugin, or set `disableAllHooks` in Claude
 Code's settings. There is no per-hook switch.
-
-## The agent contract
-
-`skills/inkentry/references/agent-contract.md` is a verbatim copy of
-[`docs/agent-contract.md`](https://github.com/inkentries/inkentry/blob/main/docs/agent-contract.md)
-in the CLI repository: what an agent records, when, and how it links each entry.
-The first line of the copy names the ref it was taken from, and CI fetches that
-file and diffs it against the copy, on every change and weekly, so the two
-cannot drift apart silently. It points at `main` for now; when inkentry 1.2.0
-ships, pin the source line to that release's tag and copy the file again.
 
 ## Why CI installs the CLI
 

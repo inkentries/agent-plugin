@@ -138,26 +138,3 @@ jobs:
 
       - name: Run every hook against a stub CLI
         run: sh scripts/test-hooks.sh
-
-  contract-in-sync:
-    name: The bundled contract matches its source in the CLI repository
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Diff the copy against the source at the ref it names
-        run: |
-          copy=skills/inkentry/references/agent-contract.md
-          url=$(head -n 1 "$copy" | sed -n 's|^<!-- source: https://github.com/\([^/]*/[^/]*\)/blob/\(.*\) -->$|https://raw.githubusercontent.com/\1/\2|p')
-          if [ -z "$url" ]; then
-            echo "$copy must start with: <!-- source: https://github.com/<owner>/<repo>/blob/<ref>/<path> -->" >&2
-            exit 1
-          fi
-          curl -fsSL "$url" -o "$RUNNER_TEMP/upstream.md"
-          tail -n +2 "$copy" > "$RUNNER_TEMP/copy.md"
-          if ! diff -u "$RUNNER_TEMP/upstream.md" "$RUNNER_TEMP/copy.md"; then
-            echo "$copy differs from $url" >&2
-            echo "Copy the source verbatim below the source line, or repoint the line at the ref that matches." >&2
-            exit 1
-          fi
-          echo "ok: $copy matches $url"
