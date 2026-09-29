@@ -9,6 +9,7 @@
     {
       "name": "inkentry",
       "source": "./",
+      "version": "1.1.0",
       "description": "Code and decision retrieval for an inkentry-indexed repository."
     }
   ]

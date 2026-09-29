@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "inkentry",
   "description": "Code and decision retrieval for an inkentry-indexed repository: search over code and memory, call and import graph traversal, and durable decisions that travel with the repo.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "inkentry",
     "url": "https://www.inkentry.com"

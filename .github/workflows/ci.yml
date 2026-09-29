@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   skill-commands-exist:
-    name: The skill names only commands the released CLI has
+    name: The skill and hooks name only commands the released CLI has
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -26,7 +26,7 @@ jobs:
           curl -fsSL https://get.inkentry.com/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Check every command the skill names
+      - name: Check every command the skill and the hooks name
         run: python3 scripts/check-skill-commands.py
 
   manifests-valid:
@@ -40,6 +40,21 @@ jobs:
           python3 -m json.tool plugin.json > /dev/null
           python3 -m json.tool .claude-plugin/plugin.json > /dev/null
           python3 -m json.tool .claude-plugin/marketplace.json > /dev/null
+
+      - name: All three manifests carry the same version
+        run: |
+          python3 - <<'PY'
+          import json, sys
+
+          versions = {
+              "plugin.json": json.load(open("plugin.json"))["version"],
+              ".claude-plugin/plugin.json": json.load(open(".claude-plugin/plugin.json"))["version"],
+              ".claude-plugin/marketplace.json": json.load(open(".claude-plugin/marketplace.json"))["plugins"][0]["version"],
+          }
+          if len(set(versions.values())) != 1:
+              sys.exit(f"manifest versions differ: {versions}")
+          print(f"ok: every manifest is at {next(iter(versions.values()))}")
+          PY
 
       - name: The portable manifest conforms to the Agent Plugins schema
         run: |
@@ -85,3 +100,64 @@ jobs:
                   sys.exit(f"SKILL.md frontmatter is missing {field!r}")
           print("ok: frontmatter carries name and description")
           PY
+
+  hooks:
+    name: Hooks are declared correctly and behave
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: hooks.json is valid, and every hook it names exists, is executable and has a timeout
+        run: |
+          python3 -m json.tool hooks/hooks.json > /dev/null
+          python3 - <<'PY'
+          import json, os, re, sys
+
+          errors = []
+          for event, groups in json.load(open("hooks/hooks.json"))["hooks"].items():
+              for group in groups:
+                  for hook in group["hooks"]:
+                      m = re.fullmatch(r'"\$\{CLAUDE_PLUGIN_ROOT\}/([^"]+)"', hook["command"])
+                      if not m:
+                          errors.append(f"{event}: command {hook['command']!r} is not a quoted plugin-root path")
+                          continue
+                      if not os.access(m[1], os.X_OK):
+                          errors.append(f"{event}: {m[1]} is missing or not executable")
+                      if not isinstance(hook.get("timeout"), int):
+                          errors.append(f"{event}: {m[1]} has no timeout")
+          if errors:
+              print("\n".join(errors), file=sys.stderr)
+              sys.exit(1)
+          print("ok: every hook in hooks.json exists, is executable and has a timeout")
+          PY
+
+      - name: Shellcheck the hooks and their tests
+        run: |
+          sudo apt-get install -y shellcheck
+          shellcheck -x --source-path=SCRIPTDIR -s sh hooks/*.sh scripts/test-hooks.sh
+
+      - name: Run every hook against a stub CLI
+        run: sh scripts/test-hooks.sh
+
+  contract-in-sync:
+    name: The bundled contract matches its source in the CLI repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Diff the copy against the source at the ref it names
+        run: |
+          copy=skills/inkentry/references/agent-contract.md
+          url=$(head -n 1 "$copy" | sed -n 's|^<!-- source: https://github.com/\([^/]*/[^/]*\)/blob/\(.*\) -->$|https://raw.githubusercontent.com/\1/\2|p')
+          if [ -z "$url" ]; then
+            echo "$copy must start with: <!-- source: https://github.com/<owner>/<repo>/blob/<ref>/<path> -->" >&2
+            exit 1
+          fi
+          curl -fsSL "$url" -o "$RUNNER_TEMP/upstream.md"
+          tail -n +2 "$copy" > "$RUNNER_TEMP/copy.md"
+          if ! diff -u "$RUNNER_TEMP/upstream.md" "$RUNNER_TEMP/copy.md"; then
+            echo "$copy differs from $url" >&2
+            echo "Copy the source verbatim below the source line, or repoint the line at the ref that matches." >&2
+            exit 1
+          fi
+          echo "ok: $copy matches $url"
