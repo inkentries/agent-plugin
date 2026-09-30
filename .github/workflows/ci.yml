@@ -102,39 +102,28 @@ jobs:
           PY
 
   hooks:
-    name: Hooks are declared correctly and behave
+    name: Hooks are declared correctly
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
-      - name: hooks.json is valid, and every hook it names exists, is executable and has a timeout
+      - name: Every hook is one guarded call to the CLI, with a timeout
         run: |
-          python3 -m json.tool hooks/hooks.json > /dev/null
           python3 - <<'PY'
-          import json, os, re, sys
+          import json, re, sys
 
           errors = []
           for event, groups in json.load(open("hooks/hooks.json"))["hooks"].items():
               for group in groups:
                   for hook in group["hooks"]:
-                      m = re.fullmatch(r'"\$\{CLAUDE_PLUGIN_ROOT\}/([^"]+)"', hook["command"])
-                      if not m:
-                          errors.append(f"{event}: command {hook['command']!r} is not a quoted plugin-root path")
-                          continue
-                      if not os.access(m[1], os.X_OK):
-                          errors.append(f"{event}: {m[1]} is missing or not executable")
+                      # `|| exit 0`: an older CLI exits 2 on the subcommand,
+                      # which Claude Code reads as "block the action".
+                      if not re.fullmatch(r"inkentry hooks agent [a-z-]+ \|\| exit 0", hook["command"]):
+                          errors.append(f"{event}: {hook['command']!r} is not `inkentry hooks agent <event> || exit 0`")
                       if not isinstance(hook.get("timeout"), int):
-                          errors.append(f"{event}: {m[1]} has no timeout")
+                          errors.append(f"{event}: no timeout")
           if errors:
               print("\n".join(errors), file=sys.stderr)
               sys.exit(1)
-          print("ok: every hook in hooks.json exists, is executable and has a timeout")
+          print("ok: every hook in hooks.json is a guarded CLI call with a timeout")
           PY
-
-      - name: Shellcheck the hooks and their tests
-        run: |
-          sudo apt-get install -y shellcheck
-          shellcheck -x --source-path=SCRIPTDIR -s sh hooks/*.sh scripts/test-hooks.sh
-
-      - name: Run every hook against a stub CLI
-        run: sh scripts/test-hooks.sh

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"",
+            "command": "inkentry hooks agent session-start || exit 0",
             "timeout": 15
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit.sh\"",
+            "command": "inkentry hooks agent pre-edit || exit 0",
             "timeout": 5
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-commit.sh\"",
+            "command": "inkentry hooks agent post-commit || exit 0",
             "timeout": 5
           }
         ]
@@ -40,8 +40,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/stop.sh\"",
-            "timeout": 2
+            "command": "inkentry hooks agent stop || exit 0",
+            "timeout": 5
           }
         ]
       }

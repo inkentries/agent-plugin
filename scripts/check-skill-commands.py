@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 
 SKILL = Path("skills/inkentry/SKILL.md")
-HOOKS = sorted(Path("hooks").glob("*.sh"))
+HOOKS = Path("hooks/hooks.json")
 PENDING = Path("scripts/pending-release.json")
 
 
@@ -134,11 +134,16 @@ def scanned_files():
     """(path, text, regions) for every file whose commands are checked."""
     text = SKILL.read_text()
     yield SKILL, text, code_regions(text, ignored_spans(text))
-    for hook in HOOKS:
-        # A script is code throughout; comments cannot match, since an
-        # invocation must start at a shell boundary and `#` is not one.
-        text = hook.read_text()
-        yield hook, text, [(text, 0)]
+    # Each hook command is a shell line of its own, so one per line here and
+    # the line reported is the hook's position in the file.
+    commands = [
+        hook["command"]
+        for groups in json.loads(HOOKS.read_text())["hooks"].values()
+        for group in groups
+        for hook in group["hooks"]
+    ]
+    text = "\n".join(commands)
+    yield HOOKS, text, [(text, 0)]
 
 
 def main() -> int:
@@ -184,7 +189,7 @@ def main() -> int:
         )
 
     print(
-        f"ok: every command {SKILL} and {len(HOOKS)} hook scripts name "
+        f"ok: every command {SKILL} and {HOOKS} name "
         f"resolves against inkentry {version()}"
     )
     return 0

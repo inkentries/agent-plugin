@@ -231,14 +231,12 @@ The plugin ships hooks that never block or fail an action. Do not repeat them.
 - **Before an edit** (`Edit`, `Write`, `MultiEdit`): adds the entries linked to
   that file, once per file per session. You do not need `memory list --file`
   before editing; use it to look at a file you have not touched.
-- **After a `git commit`** you run: `inkentry memory anchor --commit HEAD`, so
-  the entries written on the way to the commit are attached to it. Do not run
-  it yourself.
+- **After a `git commit`** you run: the entries written on the way to the
+  commit are attached to it. Do not run `memory anchor` yourself.
 - **When you stop**, once per session and only if it edited a file or
   committed: one prompt to record what was decided. If nothing qualifies, stop.
 
-The file lookup, the anchor and the stop prompt need inkentry 1.2.0 and do
-nothing on an older CLI; the session-start context works on any.
+The hooks need inkentry 1.2.0 and do nothing on an older CLI.
 
 ## Tips
 
