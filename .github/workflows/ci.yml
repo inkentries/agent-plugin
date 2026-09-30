@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   skill-commands-exist:
-    name: The skill names only commands the released CLI has
+    name: The skill and hooks name only commands the released CLI has
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -26,7 +26,7 @@ jobs:
           curl -fsSL https://get.inkentry.com/install.sh | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Check every command the skill names
+      - name: Check every command the skill and the hooks name
         run: python3 scripts/check-skill-commands.py
 
   manifests-valid:
@@ -40,6 +40,21 @@ jobs:
           python3 -m json.tool plugin.json > /dev/null
           python3 -m json.tool .claude-plugin/plugin.json > /dev/null
           python3 -m json.tool .claude-plugin/marketplace.json > /dev/null
+
+      - name: All three manifests carry the same version
+        run: |
+          python3 - <<'PY'
+          import json, sys
+
+          versions = {
+              "plugin.json": json.load(open("plugin.json"))["version"],
+              ".claude-plugin/plugin.json": json.load(open(".claude-plugin/plugin.json"))["version"],
+              ".claude-plugin/marketplace.json": json.load(open(".claude-plugin/marketplace.json"))["plugins"][0]["version"],
+          }
+          if len(set(versions.values())) != 1:
+              sys.exit(f"manifest versions differ: {versions}")
+          print(f"ok: every manifest is at {next(iter(versions.values()))}")
+          PY
 
       - name: The portable manifest conforms to the Agent Plugins schema
         run: |
@@ -84,4 +99,31 @@ jobs:
               if field not in front:
                   sys.exit(f"SKILL.md frontmatter is missing {field!r}")
           print("ok: frontmatter carries name and description")
+          PY
+
+  hooks:
+    name: Hooks are declared correctly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Every hook is one guarded call to the CLI, with a timeout
+        run: |
+          python3 - <<'PY'
+          import json, re, sys
+
+          errors = []
+          for event, groups in json.load(open("hooks/hooks.json"))["hooks"].items():
+              for group in groups:
+                  for hook in group["hooks"]:
+                      # `|| exit 0`: an older CLI exits 2 on the subcommand,
+                      # which Claude Code reads as "block the action".
+                      if not re.fullmatch(r"inkentry hooks agent [a-z-]+ \|\| exit 0", hook["command"]):
+                          errors.append(f"{event}: {hook['command']!r} is not `inkentry hooks agent <event> || exit 0`")
+                      if not isinstance(hook.get("timeout"), int):
+                          errors.append(f"{event}: no timeout")
+          if errors:
+              print("\n".join(errors), file=sys.stderr)
+              sys.exit(1)
+          print("ok: every hook in hooks.json is a guarded CLI call with a timeout")
           PY
